@@ -1,0 +1,80 @@
+---
+title: "Predictive model for apartments_pl data"
+output: 
+  html_document:
+    toc: true
+---
+
+# Read data
+
+Read the data from the kaggle website https://www.kaggle.com/datasets/krzysztofjamroz/apartment-prices-in-poland-2023q3.
+
+```{r warning=FALSE, message=FALSE}
+library("randomForest")
+apartments_pl <- read.table("apartments_pl_2023q3.csv", sep=",", header = TRUE, stringsAsFactors = TRUE)
+```
+
+# Data Preprocessing
+
+Change characters into factors.
+
+```{r warning=FALSE, message=FALSE}
+library(missMethods)
+set.seed(1)
+
+apartments_pl_filled <- impute_median(apartments_pl)
+apartments_pl_filled$price <- apartments_pl_filled$price / apartments_pl_filled$squareMeters
+
+head(apartments_pl_filled)
+```
+
+
+# Create a gbm model
+
+Let's use `gbm` library to create a `gbm` model with 250 trees 3 levels deep.
+
+```{r warning=FALSE, message=FALSE}
+library("gbm")
+set.seed(1)
+
+model <- gbm(price~.-latitude-longitude, data = apartments_pl_filled)
+```
+
+# Create a DALEX explainer
+
+Let's wrap gbm model into a DALEX explainer.
+
+```{r warning=FALSE, message=FALSE}
+library("DALEX")
+model_explained <- explain(model, apartments_pl_filled, y = apartments_pl_filled$price)
+```
+
+# Feature Importance explainer
+
+Calculate Feature Importnace explainer.
+
+```{r warning=FALSE, message=FALSE}
+library("ingredients")
+library("auditor")
+fi <- feature_importance(model_explained)
+plot(fi)
+```
+
+
+# modelStudio app
+
+Calculate modelStudio dashboard.
+
+```{r eval = FALSE}
+library(modelStudio)
+op <- ms_options(
+  subtitle = "Price of an appartment"
+)
+modelStudioApartments <- modelStudio(model_explained, 
+                  new_observation = apartments_pl_filled[sample(1:nrow(apartments_pl_filled), 25),-c(8,9,27)],
+                  options = op)
+modelStudioApartments
+
+r2d3::save_d3_html(modelStudioApartments, file = "index.html")
+```
+
